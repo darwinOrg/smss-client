@@ -22,10 +22,10 @@ const (
 	CommandDeleteMQ CommandEnum = 3
 	CommandChangeLf CommandEnum = 4
 
-	CommandDelay CommandEnum = 16
-	CommandAlive CommandEnum = 17
+	CommandDelay   CommandEnum = 16
+	CommandAlive   CommandEnum = 17
 	CommandReplica CommandEnum = 64
-	CommandList  CommandEnum = 100
+	CommandList    CommandEnum = 100
 )
 
 type BizError struct {

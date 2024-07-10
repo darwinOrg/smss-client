@@ -12,7 +12,7 @@ func main() {
 	//
 	//_, ok := <-ch
 	//fmt.Println(ok)
-	_, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", "localhost", 8080), time.Second*2)
+	_, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", "localhost", 12301), time.Second*2)
 	if err != nil {
 		return
 	}

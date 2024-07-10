@@ -1,14 +1,14 @@
 package main
 
 import (
-	"github.com/rolandhe/smss/client/client"
+	"github.com/darwinOrg/smss-client"
 	"log"
 	"time"
 )
 
 func main() {
-	//create()
-	getMqList()
+	create()
+	//getMqList()
 	//delete()
 }
 

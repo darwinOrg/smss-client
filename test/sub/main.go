@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/rolandhe/smss/client/client"
+	"github.com/darwinOrg/smss-client"
 	"log"
 	"os"
 	"os/signal"
@@ -14,7 +14,7 @@ func main() {
 }
 
 func sub() {
-	sc, err := client.NewSubClient("order", "test_usser", "localhost", 12302, time.Second*5)
+	sc, err := client.NewSubClient("order", "test_usser", "localhost", 12301, time.Second*5)
 	if err != nil {
 		log.Printf("%v\n", err)
 		return

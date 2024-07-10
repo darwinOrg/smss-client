@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/rolandhe/smss/client/client"
+	"github.com/darwinOrg/smss-client"
 	"log"
 	"strconv"
 	"sync"
@@ -19,8 +19,8 @@ func main() {
 	//}
 	//_, ok := p.(*Two)
 	//log.Println(ok)
-	//pub()
-	delay()
+	pub()
+	//delay()
 	//changeLf()
 	//multi(32)
 }
@@ -87,7 +87,7 @@ func pub() {
 		buf := []byte(base + strconv.Itoa(i))
 		msg := client.NewMessage(buf)
 		msg.AddHeader("traceId", fmt.Sprintf("tid-%d", i))
-		err = pc.Publish("life1", msg, "tid-999pxxfdb11")
+		err = pc.Publish("order", msg, "tid-999pxxfdb11")
 		if err != nil {
 			log.Printf("%v\n", err)
 			break

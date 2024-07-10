@@ -1,1 +1,0 @@
-# smss-client

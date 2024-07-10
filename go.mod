@@ -1,3 +1,3 @@
-module github.com/rolandhe/smss/client
+module github.com/darwinOrg/smss-client
 
 go 1.19
