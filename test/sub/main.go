@@ -46,7 +46,7 @@ func sub() {
 			} else {
 				body = string(msg.GetPayload())
 			}
-			log.Printf("ts=%d, id=%d, fileId=%d, pos=%d, body is: %s\n", msg.Ts, msg.Id, msg.FileId, msg.Pos, body)
+			log.Printf("ts=%d, id=%d, fileId=%d, pos=%d, body is: %s\n", msg.Ts, msg.EventId, msg.FileId, msg.Pos, body)
 			count++
 		}
 		return client.Ack
@@ -66,7 +66,7 @@ func accept(messages []*client.SubMessage) client.AckEnum {
 		} else {
 			body = string(msg.GetPayload())
 		}
-		log.Printf("%d, %d, %d, %d: %s\n", msg.Ts, msg.Id, msg.FileId, msg.Pos, body)
+		log.Printf("%d, %d, %d, %d: %s\n", msg.Ts, msg.EventId, msg.FileId, msg.Pos, body)
 	}
 	return client.Ack
 }

@@ -38,7 +38,7 @@ func NewSubClient(mqName, who, host string, port int, timeout time.Duration) (*S
 	}, nil
 }
 
-func (sc *SubClient) Sub(messageId int64, batchSize uint8, ackTimeout time.Duration, accept MessagesAccept) error {
+func (sc *SubClient) Sub(eventId int64, batchSize uint8, ackTimeout time.Duration, accept MessagesAccept) error {
 	var err error
 	defer func() {
 		if err != nil && !IsBizErr(err) {
@@ -48,7 +48,7 @@ func (sc *SubClient) Sub(messageId int64, batchSize uint8, ackTimeout time.Durat
 	if err = sc.init(); err != nil {
 		return err
 	}
-	buf := sc.packageSubCmd(messageId, batchSize, ackTimeout)
+	buf := sc.packageSubCmd(eventId, batchSize, ackTimeout)
 	if err = writeAll(sc.conn, buf, sc.ioTimeout); err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (sc *SubClient) calPackageSize() int {
 	return size
 }
 
-func (sc *SubClient) packageSubCmd(messageId int64, batchSize uint8, ackTimeout time.Duration) []byte {
+func (sc *SubClient) packageSubCmd(eventId int64, batchSize uint8, ackTimeout time.Duration) []byte {
 	buf := make([]byte, sc.calPackageSize())
 	buf[0] = CommandSub.Byte()
 	nameLen := len(sc.mqName)
@@ -138,7 +138,7 @@ func (sc *SubClient) packageSubCmd(messageId int64, batchSize uint8, ackTimeout 
 	copy(next, sc.mqName)
 
 	next = next[nameLen:]
-	binary.LittleEndian.PutUint64(next, uint64(messageId))
+	binary.LittleEndian.PutUint64(next, uint64(eventId))
 	next = next[8:]
 	binary.LittleEndian.PutUint64(next, uint64(ackTimeout))
 	next = next[8:]
