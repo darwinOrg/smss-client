@@ -47,7 +47,7 @@ func multi(count int) {
 
 func thread(no int, wg *sync.WaitGroup, notify chan struct{}) {
 	go func() {
-		pc, err := client.NewPubClient("localhost", 8080, time.Second*5000)
+		pc, err := client.NewPubClient("localhost", 8080, time.Second*5000, 3)
 		if err != nil {
 			log.Printf("%v\n", err)
 			return
@@ -75,7 +75,7 @@ func thread(no int, wg *sync.WaitGroup, notify chan struct{}) {
 }
 
 func pub() {
-	pc, err := client.NewPubClient("localhost", 12301, time.Second*5000)
+	pc, err := client.NewPubClient("localhost", 12301, time.Second*5000, 3)
 	if err != nil {
 		log.Printf("%v\n", err)
 		return
@@ -101,7 +101,7 @@ func pub() {
 }
 
 func delay() {
-	pc, err := client.NewPubClient("localhost", 12301, time.Second*50000)
+	pc, err := client.NewPubClient("localhost", 12301, time.Second*50000, 3)
 	if err != nil {
 		log.Printf("%v\n", err)
 		return
