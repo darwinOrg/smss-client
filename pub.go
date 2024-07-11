@@ -39,9 +39,9 @@ func (pc *PubClient) network() (*network, error) {
 }
 
 func (pc *PubClient) Publish(mqName string, msg *Message, traceId string) error {
-	nw, err := pc.network()
-	if err != nil {
-		return err
+	nw, ne := pc.network()
+	if ne != nil {
+		return ne
 	}
 	payload := msg.ToBytes()
 	payLoadLen := len(payload)
@@ -76,9 +76,9 @@ func (pc *PubClient) Publish(mqName string, msg *Message, traceId string) error 
 }
 
 func (pc *PubClient) PublishDelay(mqName string, msg *Message, delayMils int64, traceId string) error {
-	nw, err := pc.network()
-	if err != nil {
-		return err
+	nw, ne := pc.network()
+	if ne != nil {
+		return ne
 	}
 	payload := msg.ToBytes()
 	payLoadLen := len(payload)
@@ -116,9 +116,9 @@ func (pc *PubClient) PublishDelay(mqName string, msg *Message, delayMils int64, 
 }
 
 func (pc *PubClient) CreateMQ(mqName string, life int64, traceId string) error {
-	nw, err := pc.network()
-	if err != nil {
-		return err
+	nw, ne := pc.network()
+	if ne != nil {
+		return ne
 	}
 	traceIdLen := len(traceId)
 	hBuf := make([]byte, HeaderSize)
@@ -144,9 +144,9 @@ func (pc *PubClient) CreateMQ(mqName string, life int64, traceId string) error {
 }
 
 func (pc *PubClient) DeleteMQ(mqName string, traceId string) error {
-	nw, err := pc.network()
-	if err != nil {
-		return err
+	nw, ne := pc.network()
+	if ne != nil {
+		return ne
 	}
 	traceIdLen := len(traceId)
 	hBuf := make([]byte, HeaderSize)
@@ -193,9 +193,9 @@ func (pc *PubClient) DeleteMQ(mqName string, traceId string) error {
 //}
 
 func (pc *PubClient) GetMqList(traceId string) (string, error) {
-	nw, err := pc.network()
-	if err != nil {
-		return "", err
+	nw, ne := pc.network()
+	if ne != nil {
+		return "", ne
 	}
 	traceIdLen := len(traceId)
 	hBuf := make([]byte, HeaderSize)
@@ -212,9 +212,9 @@ func (pc *PubClient) GetMqList(traceId string) (string, error) {
 }
 
 func (pc *PubClient) Alive(traceId string) error {
-	nw, err := pc.network()
-	if err != nil {
-		return err
+	nw, ne := pc.network()
+	if ne != nil {
+		return ne
 	}
 	traceIdLen := len(traceId)
 	hBuf := make([]byte, HeaderSize)
@@ -237,9 +237,12 @@ func (pc *PubClient) Close() {
 }
 
 func (pc *PubClient) readResult(timeout time.Duration) error {
-	nw, err := pc.network()
-	if err != nil {
-		return err
+	nw, ne := pc.network()
+	if ne != nil {
+		return ne
+	}
+	if timeout == 0 {
+		timeout = nw.ioTimeout
 	}
 	f := func() error {
 		buf := make([]byte, RespHeaderSize)
@@ -257,6 +260,8 @@ func (pc *PubClient) readResult(timeout time.Duration) error {
 		errMsgLen := int(binary.LittleEndian.Uint16(buf[2:]))
 		return readErrCodeMsg(nw.conn, errMsgLen, nw.ioTimeout)
 	}
+
+	var err error
 	defer func() {
 		if err != nil && !IsBizErr(err) {
 			nw.Close()
@@ -267,9 +272,9 @@ func (pc *PubClient) readResult(timeout time.Duration) error {
 }
 
 func (pc *PubClient) readMqListResult() (string, error) {
-	nw, err := pc.network()
-	if err != nil {
-		return "", err
+	nw, ne := pc.network()
+	if ne != nil {
+		return "", ne
 	}
 	f := func() (string, error) {
 		buf := make([]byte, RespHeaderSize)
@@ -288,6 +293,8 @@ func (pc *PubClient) readMqListResult() (string, error) {
 		errMsgLen := int(binary.LittleEndian.Uint16(buf[2:]))
 		return "", readErrCodeMsg(nw.conn, errMsgLen, nw.ioTimeout)
 	}
+
+	var err error
 	defer func() {
 		if err != nil && !IsBizErr(err) {
 			nw.Close()
