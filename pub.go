@@ -5,12 +5,10 @@ import (
 	"errors"
 	pool "github.com/darwinOrg/go-conn-pool"
 	"net"
-	"sync"
 	"time"
 )
 
 type PubClient struct {
-	sync.Mutex
 	host     string
 	port     int
 	timeout  time.Duration
