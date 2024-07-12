@@ -13,7 +13,7 @@ func main() {
 }
 
 func create() {
-	pc, err := client.NewPubClient("localhost", 12301, time.Second*5)
+	pc, err := client.NewPubClient("localhost", 12301, time.Second*5, 3)
 	if err != nil {
 		log.Printf("%v\n", err)
 		return
@@ -30,7 +30,7 @@ func create() {
 }
 
 func delete() {
-	pc, err := client.NewPubClient("localhost", 12301, time.Second*500)
+	pc, err := client.NewPubClient("localhost", 12301, time.Second*500, 3)
 	if err != nil {
 		log.Printf("%v\n", err)
 		return
@@ -43,7 +43,7 @@ func delete() {
 }
 
 func getMqList() {
-	pc, err := client.NewPubClient("localhost", 12302, time.Second*5)
+	pc, err := client.NewPubClient("localhost", 12302, time.Second*5, 3)
 	if err != nil {
 		log.Printf("%v\n", err)
 		return
