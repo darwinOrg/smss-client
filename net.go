@@ -62,7 +62,11 @@ func (nw *network) init() error {
 	if err != nil {
 		return err
 	}
-	nw.conn = conn
+	tcpConn := conn.(*net.TCPConn)
+	_ = tcpConn.SetKeepAlive(true)
+	_ = tcpConn.SetKeepAlivePeriod(30 * time.Minute)
+
+	nw.conn = tcpConn
 	return nil
 }
 func (nw *network) Close() {
