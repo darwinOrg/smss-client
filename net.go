@@ -64,7 +64,7 @@ func (nw *network) init() error {
 	}
 	tcpConn := conn.(*net.TCPConn)
 	_ = tcpConn.SetKeepAlive(true)
-	_ = tcpConn.SetKeepAlivePeriod(30 * time.Minute)
+	_ = tcpConn.SetKeepAlivePeriod(time.Minute)
 
 	nw.conn = tcpConn
 	return nil
