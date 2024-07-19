@@ -3,7 +3,10 @@ package client
 import (
 	"encoding/binary"
 	"errors"
+	"github.com/darwinOrg/go-common/context"
 	pool "github.com/darwinOrg/go-conn-pool"
+	dgcron "github.com/darwinOrg/go-cron"
+	dglogger "github.com/darwinOrg/go-logger"
 	"net"
 	"time"
 )
@@ -12,6 +15,7 @@ type PubClient struct {
 	host     string
 	port     int
 	timeout  time.Duration
+	cron     *dgcron.DgCron
 	connPool pool.Pool
 }
 
@@ -20,11 +24,21 @@ func NewPubClient(host string, port int, timeout time.Duration, poolSize int) (*
 		poolSize = 1
 	}
 
+	cron := dgcron.NewAndStart(nil)
+
 	channelPool, err := pool.NewChannelPool(1, poolSize, func() (net.Conn, error) {
 		nw, err := newNetwork(host, port, timeout)
 		if err != nil {
 			return nil, err
 		}
+
+		cron.AddJob("smss发布客户端连接保活", "0 0/10 * * * ?", func(ctx *dgctx.DgContext) {
+			err := alive(nw.conn, timeout, ctx.TraceId)
+			if err != nil {
+				dglogger.Errorf(ctx, "smss alive error: %v", err)
+			}
+		})
+
 		return nw.conn, nil
 	})
 	if err != nil {
@@ -35,6 +49,7 @@ func NewPubClient(host string, port int, timeout time.Duration, poolSize int) (*
 		host:     host,
 		port:     port,
 		timeout:  timeout,
+		cron:     cron,
 		connPool: channelPool,
 	}, nil
 }
@@ -44,6 +59,7 @@ func (pc *PubClient) getConn() (net.Conn, error) {
 }
 
 func (pc *PubClient) Close() {
+	pc.cron.Stop()
 	pc.connPool.Close()
 }
 
@@ -82,7 +98,7 @@ func (pc *PubClient) Publish(mqName string, msg *Message, traceId string) error 
 
 	buf = nil
 
-	return pc.readResult(conn, 0)
+	return readResult(conn, pc.timeout)
 }
 
 func (pc *PubClient) PublishDelay(mqName string, msg *Message, delayMils int64, traceId string) error {
@@ -122,7 +138,7 @@ func (pc *PubClient) PublishDelay(mqName string, msg *Message, delayMils int64, 
 
 	buf = nil
 
-	return pc.readResult(conn, 0)
+	return readResult(conn, pc.timeout)
 }
 
 func (pc *PubClient) CreateMQ(mqName string, life int64, traceId string) error {
@@ -150,7 +166,7 @@ func (pc *PubClient) CreateMQ(mqName string, life int64, traceId string) error {
 		return err
 	}
 
-	return pc.readResult(conn, 0)
+	return readResult(conn, pc.timeout)
 }
 
 func (pc *PubClient) DeleteMQ(mqName string, traceId string) error {
@@ -172,7 +188,7 @@ func (pc *PubClient) DeleteMQ(mqName string, traceId string) error {
 		return err
 	}
 
-	return pc.readResult(conn, 0)
+	return readResult(conn, pc.timeout)
 }
 
 func (pc *PubClient) GetMqList(traceId string) (string, error) {
@@ -191,16 +207,10 @@ func (pc *PubClient) GetMqList(traceId string) (string, error) {
 	if err := writeAll(conn, hBuf, pc.timeout); err != nil {
 		return "", err
 	}
-	return pc.readMqListResult(conn)
+	return readMqListResult(conn, pc.timeout)
 }
 
-func (pc *PubClient) Alive(traceId string) error {
-	conn, ne := pc.getConn()
-	if ne != nil {
-		return ne
-	}
-	defer conn.Close()
-
+func alive(conn net.Conn, timeout time.Duration, traceId string) error {
 	traceIdLen := len(traceId)
 	hBuf := make([]byte, HeaderSize)
 	hBuf[0] = CommandAlive.Byte()
@@ -208,17 +218,13 @@ func (pc *PubClient) Alive(traceId string) error {
 	if traceIdLen > 0 {
 		hBuf = append(hBuf, []byte(traceId)...)
 	}
-	if err := writeAll(conn, hBuf, pc.timeout); err != nil {
+	if err := writeAll(conn, hBuf, timeout); err != nil {
 		return err
 	}
-	return pc.readResult(conn, 0)
+	return readResult(conn, timeout)
 }
 
-func (pc *PubClient) readResult(conn net.Conn, timeout time.Duration) error {
-	if timeout == 0 {
-		timeout = pc.timeout
-	}
-
+func readResult(conn net.Conn, timeout time.Duration) error {
 	buf := make([]byte, RespHeaderSize)
 	if err := readAll(conn, buf, timeout); err != nil {
 		return err
@@ -232,23 +238,23 @@ func (pc *PubClient) readResult(conn net.Conn, timeout time.Duration) error {
 		return errors.New("not support code")
 	}
 	errMsgLen := int(binary.LittleEndian.Uint16(buf[2:]))
-	return readErrCodeMsg(conn, errMsgLen, pc.timeout)
+	return readErrCodeMsg(conn, errMsgLen, timeout)
 }
 
-func (pc *PubClient) readMqListResult(conn net.Conn) (string, error) {
+func readMqListResult(conn net.Conn, timeout time.Duration) (string, error) {
 	buf := make([]byte, RespHeaderSize)
-	if err := readAll(conn, buf, pc.timeout); err != nil {
+	if err := readAll(conn, buf, timeout); err != nil {
 		return "", err
 	}
 
 	code := binary.LittleEndian.Uint16(buf)
 	if code == OkCode {
 		bodyLen := int(binary.LittleEndian.Uint32(buf[2:]))
-		return readMQListBody(conn, bodyLen, pc.timeout)
+		return readMQListBody(conn, bodyLen, timeout)
 	}
 	if code != ErrCode {
 		return "", errors.New("not suport code")
 	}
 	errMsgLen := int(binary.LittleEndian.Uint16(buf[2:]))
-	return "", readErrCodeMsg(conn, errMsgLen, pc.timeout)
+	return "", readErrCodeMsg(conn, errMsgLen, timeout)
 }
