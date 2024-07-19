@@ -6,9 +6,8 @@ import (
 	"github.com/darwinOrg/go-common/context"
 	"github.com/darwinOrg/go-common/utils"
 	pool "github.com/darwinOrg/go-conn-pool"
-	dgcron "github.com/darwinOrg/go-cron"
 	dglogger "github.com/darwinOrg/go-logger"
-	"log"
+	"github.com/google/uuid"
 	"net"
 	"time"
 )
@@ -17,7 +16,6 @@ type PubClient struct {
 	host     string
 	port     int
 	timeout  time.Duration
-	cron     *dgcron.DgCron
 	connPool pool.Pool
 }
 
@@ -26,21 +24,11 @@ func NewPubClient(host string, port int, timeout time.Duration, poolSize int) (*
 		poolSize = 1
 	}
 
-	cron := dgcron.NewAndStart(nil)
-
 	channelPool, err := pool.NewChannelPool(1, poolSize, func() (net.Conn, error) {
 		nw, err := newNetwork(host, port, timeout)
 		if err != nil {
 			return nil, err
 		}
-
-		cron.AddJob("smss发布客户端连接保活", "0 0/10 * * * ?", func(ctx *dgctx.DgContext) {
-			err := alive(nw.conn, timeout, ctx.TraceId)
-			if err != nil {
-				dglogger.Errorf(ctx, "smss alive error: %v", err)
-			}
-		})
-
 		return nw.conn, nil
 	})
 	if err != nil {
@@ -51,7 +39,6 @@ func NewPubClient(host string, port int, timeout time.Duration, poolSize int) (*
 		host:     host,
 		port:     port,
 		timeout:  timeout,
-		cron:     cron,
 		connPool: channelPool,
 	}, nil
 }
@@ -234,20 +221,28 @@ func (pc *PubClient) getConn() (net.Conn, error) {
 	)
 	poolLen := pc.connPool.Len()
 	times := poolLen + 1
+	ctx := &dgctx.DgContext{TraceId: uuid.NewString()}
 
 	for i := 0; i < times; i++ {
 		conn, err = pc.connPool.Get()
-		if err == nil {
-			return conn, err
+		if err != nil {
+			continue
 		}
+
+		err = alive(conn, pc.timeout, ctx.TraceId)
+		if err != nil {
+			dglogger.Errorf(ctx, "smss alive error: %v", err)
+			continue
+		}
+
+		return conn, nil
 	}
 
-	log.Printf("get conn error: %v", err)
+	dglogger.Errorf(ctx, "get conn error: %v", err)
 	return conn, err
 }
 
 func (pc *PubClient) Close() {
-	pc.cron.Stop()
 	pc.connPool.Close()
 }
 
