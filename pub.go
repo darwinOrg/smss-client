@@ -4,9 +4,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/darwinOrg/go-common/context"
+	"github.com/darwinOrg/go-common/utils"
 	pool "github.com/darwinOrg/go-conn-pool"
 	dgcron "github.com/darwinOrg/go-cron"
 	dglogger "github.com/darwinOrg/go-logger"
+	"log"
 	"net"
 	"time"
 )
@@ -54,22 +56,7 @@ func NewPubClient(host string, port int, timeout time.Duration, poolSize int) (*
 	}, nil
 }
 
-func (pc *PubClient) getConn() (net.Conn, error) {
-	return pc.connPool.Get()
-}
-
-func (pc *PubClient) Close() {
-	pc.cron.Stop()
-	pc.connPool.Close()
-}
-
 func (pc *PubClient) Publish(mqName string, msg *Message, traceId string) error {
-	conn, ne := pc.getConn()
-	if ne != nil {
-		return ne
-	}
-	defer conn.Close()
-
 	payload := msg.ToBytes()
 	payLoadLen := len(payload)
 	if payLoadLen <= 8 {
@@ -92,21 +79,18 @@ func (pc *PubClient) Publish(mqName string, msg *Message, traceId string) error 
 	copy(dst, payload)
 	payload = nil
 
-	if err := writeAll(conn, buf, pc.timeout); err != nil {
+	conn, err := pc.getConnAndWriteAll(buf)
+	buf = nil
+	if conn != nil {
+		defer conn.Close()
+	}
+	if err != nil {
 		return err
 	}
-
-	buf = nil
-
 	return readResult(conn, pc.timeout)
 }
 
 func (pc *PubClient) PublishDelay(mqName string, msg *Message, delayMils int64, traceId string) error {
-	conn, ne := pc.getConn()
-	if ne != nil {
-		return ne
-	}
-	defer conn.Close()
 	payload := msg.ToBytes()
 	payLoadLen := len(payload)
 	if payLoadLen <= 8 {
@@ -132,21 +116,18 @@ func (pc *PubClient) PublishDelay(mqName string, msg *Message, delayMils int64, 
 	copy(dst[8:], payload)
 	payload = nil
 
-	if err := writeAll(conn, buf, pc.timeout); err != nil {
+	conn, err := pc.getConnAndWriteAll(buf)
+	buf = nil
+	if conn != nil {
+		defer conn.Close()
+	}
+	if err != nil {
 		return err
 	}
-
-	buf = nil
-
 	return readResult(conn, pc.timeout)
 }
 
 func (pc *PubClient) CreateMQ(mqName string, life int64, traceId string) error {
-	conn, ne := pc.getConn()
-	if ne != nil {
-		return ne
-	}
-	defer conn.Close()
 	traceIdLen := len(traceId)
 	hBuf := make([]byte, HeaderSize)
 	hBuf[0] = CommandCreateMQ.Byte()
@@ -162,19 +143,18 @@ func (pc *PubClient) CreateMQ(mqName string, life int64, traceId string) error {
 	binary.LittleEndian.PutUint64(pBuf, uint64(life))
 	hBuf = append(hBuf, pBuf...)
 
-	if err := writeAll(conn, hBuf, pc.timeout); err != nil {
+	conn, err := pc.getConnAndWriteAll(hBuf)
+	hBuf = nil
+	if conn != nil {
+		defer conn.Close()
+	}
+	if err != nil {
 		return err
 	}
-
 	return readResult(conn, pc.timeout)
 }
 
 func (pc *PubClient) DeleteMQ(mqName string, traceId string) error {
-	conn, ne := pc.getConn()
-	if ne != nil {
-		return ne
-	}
-	defer conn.Close()
 	traceIdLen := len(traceId)
 	hBuf := make([]byte, HeaderSize)
 	hBuf[0] = CommandDeleteMQ.Byte()
@@ -184,30 +164,91 @@ func (pc *PubClient) DeleteMQ(mqName string, traceId string) error {
 	if traceIdLen > 0 {
 		hBuf = append(hBuf, []byte(traceId)...)
 	}
-	if err := writeAll(conn, hBuf, pc.timeout); err != nil {
+
+	conn, err := pc.getConnAndWriteAll(hBuf)
+	hBuf = nil
+	if conn != nil {
+		defer conn.Close()
+	}
+	if err != nil {
 		return err
 	}
-
 	return readResult(conn, pc.timeout)
 }
 
 func (pc *PubClient) GetMqList(traceId string) (string, error) {
-	conn, ne := pc.getConn()
-	if ne != nil {
-		return "", ne
-	}
-	defer conn.Close()
 	traceIdLen := len(traceId)
-	hBuf := make([]byte, HeaderSize)
-	hBuf[0] = CommandList.Byte()
-	hBuf[19] = byte(traceIdLen)
+	buf := make([]byte, HeaderSize)
+	buf[0] = CommandList.Byte()
+	buf[19] = byte(traceIdLen)
 	if traceIdLen > 0 {
-		hBuf = append(hBuf, []byte(traceId)...)
+		buf = append(buf, []byte(traceId)...)
 	}
-	if err := writeAll(conn, hBuf, pc.timeout); err != nil {
+
+	conn, err := pc.getConnAndWriteAll(buf)
+	buf = nil
+	if conn != nil {
+		defer conn.Close()
+	}
+	if err != nil {
 		return "", err
 	}
 	return readMqListResult(conn, pc.timeout)
+}
+
+func (pc *PubClient) getConnAndWriteAll(buf []byte) (net.Conn, error) {
+	var (
+		conn     net.Conn
+		connErr  error
+		writeErr error
+		success  bool
+	)
+
+	for i := 0; i < 5; i++ {
+		conn, connErr = pc.getConn()
+		if connErr != nil {
+			continue
+		}
+
+		if writeErr = writeAll(conn, buf, pc.timeout); writeErr == nil {
+			success = true
+			break
+		} else {
+			conn.(*pool.PoolConn).MarkUnusable()
+			_ = conn.Close()
+			conn = nil
+		}
+	}
+
+	if !success {
+		return conn, utils.IfReturn(writeErr != nil, writeErr, connErr)
+	}
+
+	return conn, nil
+}
+
+func (pc *PubClient) getConn() (net.Conn, error) {
+	var (
+		conn net.Conn
+		err  error
+	)
+	poolLen := pc.connPool.Len()
+	times := poolLen + 1
+
+	for i := 0; i < times; i++ {
+		conn, err = pc.connPool.Get()
+		if err == nil {
+			return conn, err
+		}
+	}
+
+	log.Printf("get conn error: %v", err)
+	return conn, err
+}
+
+func (pc *PubClient) Close() {
+	pc.cron.Stop()
+	pc.connPool.Close()
 }
 
 func alive(conn net.Conn, timeout time.Duration, traceId string) error {
